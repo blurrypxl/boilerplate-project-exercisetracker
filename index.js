@@ -4,6 +4,7 @@ const app = express()
 const cors = require('cors')
 const mongoose = require('mongoose')
 const bodyParser = require('body-parser')
+const gid = require('generate-unique-id')
 
 app.use(cors())
 app.use(express.static('public'))
@@ -22,6 +23,7 @@ mongoose
 const exerciseSchema = new mongoose.Schema({
   username: { type: String, required: true },
   count: { type: Number, required: false },
+  _id: { type: String, required: true },
   log: [{
     date: { type: String, required: false },
     duration: { type: String, required: false },
@@ -37,12 +39,12 @@ app.get('/', (req, res) => {
 
 app.router('/api/users')
   .get(async function (req, res, next) {
-    const getUsers = await exerciseModel.find({}, { '_id': true, 'username': true }).exec()
+    const getUsers = await exerciseModel.find({}, { 'username': true, '_id': true }).exec()
     res.json([getUsers])
   })
   .post(async function (req, res, next) {
     const username = req.body.username
-    const sendUsername = new exerciseModel({ 'username': username })
+    const sendUsername = new exerciseModel({ 'username': username, '_id': gid({ length: 10 }) })
 
     await sendUsername
       .save()
@@ -50,13 +52,29 @@ app.router('/api/users')
         console.log('Document saved')
       })
       .catch(function (err) {
-        if (err) console.error(err)
+        if (err) {
+          console.error(err)
+          res.json({ 'Error': err })
+        }
       })
+    
+    res.json({ 'message': 'Document saved' })
   })
 
-app.get('/api/users/:_id/logs', function (req, res, next) { })
+app.get('/api/users/:_id/logs/:from/:to/:limit', async function (req, res, next) {
+  const { _id, from, to, limit = 0 } = req.params
+  const getLogs = await exerciseModel
+    .findById(_id)
+    .densify({ field: 'date', step: 1, unit: 'second', range: { bounds: [from, to] } })
+    .limit(limit)
+    .exec()
 
-app.post('/api/users/:_id/exercises', function (req, res, next) { })
+  res.json([getLogs])
+})
+
+app.post('/api/users/:_id/exercises', function (req, res, next) {
+
+})
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
